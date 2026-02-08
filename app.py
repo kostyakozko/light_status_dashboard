@@ -10,7 +10,16 @@ import secrets
 import os
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+# Use persistent secret key from environment or generate one
+SECRET_KEY_FILE = "/var/lib/light_status/dashboard_secret.key"
+if os.path.exists(SECRET_KEY_FILE):
+    with open(SECRET_KEY_FILE, 'r') as f:
+        app.secret_key = f.read().strip()
+else:
+    app.secret_key = secrets.token_hex(32)
+    os.makedirs(os.path.dirname(SECRET_KEY_FILE), exist_ok=True)
+    with open(SECRET_KEY_FILE, 'w') as f:
+        f.write(app.secret_key)
 
 DB_FILE = "/var/lib/light_status/config.db"
 BOT_API_URL = "http://localhost:8080"
