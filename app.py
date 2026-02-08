@@ -62,13 +62,16 @@ def login():
 @app.route('/auth/telegram')
 def auth_telegram():
     """Handle Telegram OAuth callback"""
+    print(f"Auth callback received: {dict(request.args)}")  # Debug
     auth_data = dict(request.args)
     
     if verify_telegram_auth(auth_data):
         session['telegram_user_id'] = int(auth_data['id'])
         session['telegram_username'] = auth_data.get('username') or auth_data.get('first_name')
+        print(f"Auth successful for user {session['telegram_user_id']}")  # Debug
         return redirect(url_for('index'))
     
+    print("Auth verification failed")  # Debug
     return redirect(url_for('login'))
 
 @app.route('/logout')
