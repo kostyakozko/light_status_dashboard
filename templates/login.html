@@ -4,11 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Power Status Dashboard</title>
-    <script async src="https://telegram.org/js/telegram-widget.js?22" 
-            data-telegram-login="light_status_monitor_bot" 
-            data-size="large" 
-            data-auth-url="https://svitlolightbot.mooo.com/auth/telegram" 
-            data-request-access="write"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -29,13 +24,41 @@
         }
         h1 { margin-bottom: 10px; color: #333; }
         p { color: #666; margin-bottom: 30px; }
+        .telegram-btn {
+            display: inline-block;
+            background: #0088cc;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        .telegram-btn:hover {
+            background: #006699;
+        }
+        .note {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+        }
     </style>
 </head>
 <body>
     <div class="login-box">
         <h1>⚡ Power Status Dashboard</h1>
         <p>Login with Telegram to view your channels</p>
-        <div id="telegram-login"></div>
+        
+        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                data-telegram-login="light_status_monitor_bot" 
+                data-size="large" 
+                data-auth-url="https://svitlolightbot.mooo.com/auth/telegram" 
+                data-request-access="write"></script>
+        
+        <div class="note">
+            <p>If the button doesn't appear, you may need to configure the bot domain.</p>
+            <p>Contact <a href="https://t.me/light_status_monitor_bot">@light_status_monitor_bot</a> to set it up.</p>
+        </div>
     </div>
 </body>
 </html>
