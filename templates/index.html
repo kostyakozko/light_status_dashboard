@@ -95,16 +95,32 @@
         let channels = [];
 
         async function loadChannels() {
-            const res = await fetch('/api/channels');
-            channels = await res.json();
-            
-            const select = document.getElementById('channel');
-            select.innerHTML = channels.map(ch => 
-                `<option value="${ch.id}">${ch.name}</option>`
-            ).join('');
-            
-            if (channels.length > 0) {
-                loadStats();
+            try {
+                const res = await fetch('/api/channels');
+                if (!res.ok) {
+                    const error = await res.json();
+                    console.error('Failed to load channels:', error);
+                    document.getElementById('channel').innerHTML = '<option>Error: ' + (error.error || 'Unknown') + '</option>';
+                    return;
+                }
+                channels = await res.json();
+                
+                if (channels.length === 0) {
+                    document.getElementById('channel').innerHTML = '<option>No channels found</option>';
+                    return;
+                }
+                
+                const select = document.getElementById('channel');
+                select.innerHTML = channels.map(ch => 
+                    `<option value="${ch.id}">${ch.name}</option>`
+                ).join('');
+                
+                if (channels.length > 0) {
+                    loadStats();
+                }
+            } catch (error) {
+                console.error('Error loading channels:', error);
+                document.getElementById('channel').innerHTML = '<option>Error loading channels</option>';
             }
         }
 
