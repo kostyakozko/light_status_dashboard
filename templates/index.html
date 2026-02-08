@@ -185,7 +185,18 @@
                 },
                 options: {
                     scales: { y: { beginAtZero: true } },
-                    plugins: { legend: { display: false } }
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const hours = Math.floor(context.parsed.y);
+                                    const minutes = Math.round((context.parsed.y - hours) * 60);
+                                    return `${hours}h ${minutes}m`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
             
@@ -202,7 +213,18 @@
                 },
                 options: {
                     scales: { y: { beginAtZero: true } },
-                    plugins: { legend: { display: false } }
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const hours = Math.floor(context.parsed.y);
+                                    const minutes = Math.round((context.parsed.y - hours) * 60);
+                                    return `${hours}h ${minutes}m`;
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
