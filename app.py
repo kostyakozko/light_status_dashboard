@@ -1,41 +1,79 @@
 #!/usr/bin/env python3
 import sqlite3
-from flask import Flask, render_template, jsonify
+import requests
+from flask import Flask, render_template, jsonify, session, redirect, url_for, request
 from datetime import datetime, timedelta
 import pytz
+import secrets
 
 app = Flask(__name__)
+app.secret_key = secrets.token_hex(32)
+
 DB_FILE = "/var/lib/light_status/config.db"
+BOT_API_URL = "http://localhost:8080"
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
+def check_auth():
+    """Check if user is authenticated via Telegram"""
+    return session.get('telegram_user_id') is not None
+
 @app.route('/')
 def index():
+    if not check_auth():
+        return redirect(url_for('login'))
     return render_template('index.html')
+
+@app.route('/login')
+def login():
+    return render_template('login.html')
+
+@app.route('/auth/telegram')
+def auth_telegram():
+    """Handle Telegram OAuth callback"""
+    # Get Telegram auth data from query params
+    telegram_id = request.args.get('id')
+    first_name = request.args.get('first_name')
+    username = request.args.get('username')
+    auth_date = request.args.get('auth_date')
+    hash_value = request.args.get('hash')
+    
+    # TODO: Verify hash with bot token
+    # For now, just accept if telegram_id exists
+    if telegram_id:
+        session['telegram_user_id'] = int(telegram_id)
+        session['telegram_username'] = username or first_name
+        return redirect(url_for('index'))
+    
+    return redirect(url_for('login'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/api/channels')
 def api_channels():
-    conn = get_db()
-    channels = conn.execute(
-        "SELECT channel_id, channel_name, is_power_on, last_request_time, timezone FROM channels WHERE owner_id IS NOT NULL"
-    ).fetchall()
-    conn.close()
+    if not check_auth():
+        return jsonify({'error': 'Unauthorized'}), 401
     
-    result = []
-    for ch in channels:
-        result.append({
-            'id': ch['channel_id'],
-            'name': ch['channel_name'] or f"Channel {ch['channel_id']}",
-            'status': 'online' if ch['is_power_on'] else 'offline',
-            'last_ping': ch['last_request_time']
-        })
-    return jsonify(result)
+    # Proxy to bot API
+    try:
+        resp = requests.get(f"{BOT_API_URL}/api/channels", timeout=5)
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stats/<int:channel_id>')
 def api_stats(channel_id):
+    if not check_auth():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    days = request.args.get('days', 7, type=int)
+    
     conn = get_db()
     
     # Get channel info
@@ -49,11 +87,11 @@ def api_stats(channel_id):
     tz = pytz.timezone(channel['timezone'])
     now = datetime.now(tz)
     
-    # Get history for last 7 days
-    week_ago = (now - timedelta(days=7)).timestamp()
+    # Get history
+    start_time = (now - timedelta(days=days)).timestamp()
     history = conn.execute(
         "SELECT timestamp, status FROM history WHERE channel_id = ? AND timestamp >= ? ORDER BY timestamp",
-        (channel_id, week_ago)
+        (channel_id, start_time)
     ).fetchall()
     
     conn.close()
