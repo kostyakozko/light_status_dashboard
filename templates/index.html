@@ -167,15 +167,15 @@
             });
             
             // Daily stats
-            const days = Object.keys(data.daily).sort();
-            const uptimeData = days.map(d => data.daily[d].uptime / 3600);
-            const downtimeData = days.map(d => data.daily[d].downtime / 3600);
+            const dailyDays = Object.keys(data.daily).sort();
+            const uptimeData = dailyDays.map(d => data.daily[d].uptime / 3600);
+            const downtimeData = dailyDays.map(d => data.daily[d].downtime / 3600);
             
             if (uptimeChart) uptimeChart.destroy();
             uptimeChart = new Chart(document.getElementById('uptimeChart'), {
                 type: 'bar',
                 data: {
-                    labels: days,
+                    labels: dailyDays,
                     datasets: [{
                         label: 'Hours',
                         data: uptimeData,
@@ -192,7 +192,7 @@
             downtimeChart = new Chart(document.getElementById('downtimeChart'), {
                 type: 'bar',
                 data: {
-                    labels: days,
+                    labels: dailyDays,
                     datasets: [{
                         label: 'Hours',
                         data: downtimeData,
