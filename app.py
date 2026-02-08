@@ -148,6 +148,11 @@ def api_stats(channel_id):
         (channel_id, start_time)
     ).fetchall()
     
+    # Get current status to extend timeline to now
+    current_channel = conn.execute(
+        "SELECT is_power_on FROM channels WHERE channel_id = ?", (channel_id,)
+    ).fetchone()
+    
     conn.close()
     
     # Format for charts
@@ -156,6 +161,13 @@ def api_stats(channel_id):
         timeline.append({
             'time': int(h['timestamp'] * 1000),
             'status': h['status']
+        })
+    
+    # Add current status point at "now" to extend the line
+    if current_channel and timeline:
+        timeline.append({
+            'time': int(now.timestamp() * 1000),
+            'status': current_channel['is_power_on']
         })
     
     # Calculate daily stats
