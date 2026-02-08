@@ -159,6 +159,12 @@ def api_stats(channel_id):
         "SELECT is_power_on FROM channels WHERE channel_id = ?", (channel_id,)
     ).fetchone()
     
+    # Get all history for status lookups (for daily stats calculation)
+    all_history = conn.execute(
+        "SELECT timestamp, status FROM history WHERE channel_id = ? ORDER BY timestamp",
+        (channel_id,)
+    ).fetchall()
+    
     conn.close()
     
     # Format for charts
@@ -193,40 +199,74 @@ def api_stats(channel_id):
             daily_stats[day] = {'online': 0, 'offline': 0, 'events': []}
         daily_stats[day]['events'].append({'time': h['timestamp'], 'status': h['status']})
     
+    # Add today even if no events (to show current ongoing status)
+    today_str = now.strftime('%Y-%m-%d')
+    if today_str not in daily_stats:
+        daily_stats[today_str] = {'events': []}
+    
+    # Get status at start of each day for proper calculation
+    for day in list(daily_stats.keys()):
+        day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
+        day_start = day_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        
+        # Find status at start of this day from all_history
+        status_at_day_start = None
+        for h in reversed(all_history):
+            if h['timestamp'] < day_start:
+                status_at_day_start = h['status']
+                break
+        
+        if status_at_day_start is not None:
+            daily_stats[day]['status_at_start'] = status_at_day_start
+        elif daily_stats[day]['events']:
+            # No history before this day, use first event's status
+            daily_stats[day]['status_at_start'] = daily_stats[day]['events'][0]['status']
+        else:
+            # No events and no history, use current status
+            daily_stats[day]['status_at_start'] = current_channel['is_power_on'] if current_channel else 0
+    
     # Calculate uptime/downtime per day
     for day, data in daily_stats.items():
         events = sorted(data['events'], key=lambda x: x['time'])
         uptime = downtime = 0
         
-        for i in range(len(events) - 1):
-            duration = events[i+1]['time'] - events[i]['time']
-            if events[i]['status'] == 1:
+        day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
+        day_start = day_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        
+        # Start from midnight with status at that time
+        prev_status = data.get('status_at_start', 0)
+        prev_time = day_start
+        
+        for event in events:
+            duration = event['time'] - prev_time
+            if prev_status == 1:
                 uptime += duration
             else:
                 downtime += duration
+            
+            prev_status = event['status']
+            prev_time = event['time']
         
-        # Add period from last event to end of day (or now if today)
-        if events:
-            last_event = events[-1]
-            day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
-            
-            if day == now.strftime('%Y-%m-%d'):
-                # Today: add from last event to now
-                end_time = now.timestamp()
-            else:
-                # Past day: add from last event to end of day (23:59:59)
-                end_of_day = day_date.replace(hour=23, minute=59, second=59)
-                end_time = end_of_day.timestamp()
-            
-            ongoing_duration = end_time - last_event['time']
-            if last_event['status'] == 1:
-                uptime += ongoing_duration
-            else:
-                downtime += ongoing_duration
+        # Add period from last event (or day start if no events) to end of day (or now if today)
+        if day == now.strftime('%Y-%m-%d'):
+            # Today: add from last event to now
+            end_time = now.timestamp()
+        else:
+            # Past day: add from last event to end of day (23:59:59)
+            end_of_day = day_date.replace(hour=23, minute=59, second=59)
+            end_time = end_of_day.timestamp()
+        
+        ongoing_duration = end_time - prev_time
+        if prev_status == 1:
+            uptime += ongoing_duration
+        else:
+            downtime += ongoing_duration
         
         data['uptime'] = uptime
         data['downtime'] = downtime
         del data['events']
+        if 'status_at_start' in data:
+            del data['status_at_start']
     
     return jsonify({
         'timeline': timeline,
