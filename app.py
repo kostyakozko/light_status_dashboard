@@ -170,6 +170,15 @@ def api_stats(channel_id):
             else:
                 downtime += duration
         
+        # Add ongoing period from last event to now (if it's today)
+        if events and day == now.strftime('%Y-%m-%d'):
+            last_event = events[-1]
+            ongoing_duration = now.timestamp() - last_event['time']
+            if last_event['status'] == 1:
+                uptime += ongoing_duration
+            else:
+                downtime += ongoing_duration
+        
         data['uptime'] = uptime
         data['downtime'] = downtime
         del data['events']
