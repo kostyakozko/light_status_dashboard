@@ -206,7 +206,8 @@ def api_stats(channel_id):
     
     # Get status at start of each day for proper calculation
     for day in list(daily_stats.keys()):
-        day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
+        day_naive = datetime.strptime(day, '%Y-%m-%d')
+        day_date = tz.localize(day_naive)
         day_start = day_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         
         # Find status at start of this day from all_history
@@ -230,7 +231,9 @@ def api_stats(channel_id):
         events = sorted(data['events'], key=lambda x: x['time'])
         uptime = downtime = 0
         
-        day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
+        # Properly localize the day start time
+        day_naive = datetime.strptime(day, '%Y-%m-%d')
+        day_date = tz.localize(day_naive)
         day_start = day_date.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         
         # Start from midnight with status at that time
