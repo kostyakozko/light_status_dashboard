@@ -116,10 +116,15 @@ def api_channels():
         })
     return jsonify(result)
 
-@app.route('/api/stats/<int:channel_id>')
+@app.route('/api/stats/<channel_id>')
 def api_stats(channel_id):
     if not check_auth():
         return jsonify({'error': 'Unauthorized'}), 401
+    
+    try:
+        channel_id = int(channel_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid channel ID'}), 400
     
     user_id = session['telegram_user_id']
     
