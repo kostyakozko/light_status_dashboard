@@ -148,6 +148,12 @@ def api_stats(channel_id):
         (channel_id, start_time)
     ).fetchall()
     
+    # Get status at start of time range (last event before start_time) to extend line backwards
+    status_at_start = conn.execute(
+        "SELECT status FROM history WHERE channel_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT 1",
+        (channel_id, start_time)
+    ).fetchone()
+    
     # Get current status to extend timeline to now
     current_channel = conn.execute(
         "SELECT is_power_on FROM channels WHERE channel_id = ?", (channel_id,)
@@ -157,6 +163,14 @@ def api_stats(channel_id):
     
     # Format for charts
     timeline = []
+    
+    # Add starting point if we have status before the range (to show full line from start)
+    if status_at_start and history:
+        timeline.append({
+            'time': int(start_time * 1000),
+            'status': status_at_start['status']
+        })
+    
     for h in history:
         timeline.append({
             'time': int(h['timestamp'] * 1000),
@@ -191,10 +205,20 @@ def api_stats(channel_id):
             else:
                 downtime += duration
         
-        # Add ongoing period from last event to now (if it's today)
-        if events and day == now.strftime('%Y-%m-%d'):
+        # Add period from last event to end of day (or now if today)
+        if events:
             last_event = events[-1]
-            ongoing_duration = now.timestamp() - last_event['time']
+            day_date = datetime.strptime(day, '%Y-%m-%d').replace(tzinfo=tz)
+            
+            if day == now.strftime('%Y-%m-%d'):
+                # Today: add from last event to now
+                end_time = now.timestamp()
+            else:
+                # Past day: add from last event to end of day (23:59:59)
+                end_of_day = day_date.replace(hour=23, minute=59, second=59)
+                end_time = end_of_day.timestamp()
+            
+            ongoing_duration = end_time - last_event['time']
             if last_event['status'] == 1:
                 uptime += ongoing_duration
             else:
