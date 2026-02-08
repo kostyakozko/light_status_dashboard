@@ -1,25 +1,53 @@
 #!/usr/bin/env python3
 import sqlite3
 import requests
+import hashlib
+import hmac
 from flask import Flask, render_template, jsonify, session, redirect, url_for, request
 from datetime import datetime, timedelta
 import pytz
 import secrets
+import os
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
 DB_FILE = "/var/lib/light_status/config.db"
 BOT_API_URL = "http://localhost:8080"
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '')  # Set via environment variable
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
+def verify_telegram_auth(auth_data):
+    """Verify Telegram login widget data"""
+    check_hash = auth_data.get('hash')
+    if not check_hash or not BOT_TOKEN:
+        return False
+    
+    auth_data_copy = {k: v for k, v in auth_data.items() if k != 'hash'}
+    data_check_string = '\n'.join([f"{k}={v}" for k, v in sorted(auth_data_copy.items())])
+    
+    secret_key = hashlib.sha256(BOT_TOKEN.encode()).digest()
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    
+    return calculated_hash == check_hash
+
 def check_auth():
     """Check if user is authenticated via Telegram"""
     return session.get('telegram_user_id') is not None
+
+def check_channel_access(user_id, channel_id):
+    """Check if user owns the channel"""
+    conn = get_db()
+    channel = conn.execute(
+        "SELECT owner_id FROM channels WHERE channel_id = ?", (channel_id,)
+    ).fetchone()
+    conn.close()
+    
+    return channel and channel['owner_id'] == user_id
 
 @app.route('/')
 def index():
@@ -34,18 +62,11 @@ def login():
 @app.route('/auth/telegram')
 def auth_telegram():
     """Handle Telegram OAuth callback"""
-    # Get Telegram auth data from query params
-    telegram_id = request.args.get('id')
-    first_name = request.args.get('first_name')
-    username = request.args.get('username')
-    auth_date = request.args.get('auth_date')
-    hash_value = request.args.get('hash')
+    auth_data = dict(request.args)
     
-    # TODO: Verify hash with bot token
-    # For now, just accept if telegram_id exists
-    if telegram_id:
-        session['telegram_user_id'] = int(telegram_id)
-        session['telegram_username'] = username or first_name
+    if verify_telegram_auth(auth_data):
+        session['telegram_user_id'] = int(auth_data['id'])
+        session['telegram_username'] = auth_data.get('username') or auth_data.get('first_name')
         return redirect(url_for('index'))
     
     return redirect(url_for('login'))
@@ -60,17 +81,36 @@ def api_channels():
     if not check_auth():
         return jsonify({'error': 'Unauthorized'}), 401
     
-    # Proxy to bot API
-    try:
-        resp = requests.get(f"{BOT_API_URL}/api/channels", timeout=5)
-        return jsonify(resp.json())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    user_id = session['telegram_user_id']
+    
+    # Get only user's channels
+    conn = get_db()
+    channels = conn.execute(
+        "SELECT channel_id, channel_name, is_power_on, last_request_time FROM channels WHERE owner_id = ?",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    
+    result = []
+    for ch in channels:
+        result.append({
+            'id': ch['channel_id'],
+            'name': ch['channel_name'] or f"Channel {ch['channel_id']}",
+            'status': 'online' if ch['is_power_on'] else 'offline',
+            'last_ping': ch['last_request_time']
+        })
+    return jsonify(result)
 
 @app.route('/api/stats/<int:channel_id>')
 def api_stats(channel_id):
     if not check_auth():
         return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session['telegram_user_id']
+    
+    # Check access
+    if not check_channel_access(user_id, channel_id):
+        return jsonify({'error': 'Access denied'}), 403
     
     days = request.args.get('days', 7, type=int)
     
