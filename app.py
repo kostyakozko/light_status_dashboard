@@ -190,19 +190,27 @@ def api_stats(channel_id):
             'status': current_channel['is_power_on']
         })
     
-    # Calculate daily stats
+    # Calculate daily stats - use all_history to get complete days
     daily_stats = {}
+    
+    # First, determine which days are in our time range
+    days_in_range = set()
     for h in history:
         dt = datetime.fromtimestamp(h['timestamp'], tz)
-        day = dt.strftime('%Y-%m-%d')
-        if day not in daily_stats:
-            daily_stats[day] = {'online': 0, 'offline': 0, 'events': []}
-        daily_stats[day]['events'].append({'time': h['timestamp'], 'status': h['status']})
+        days_in_range.add(dt.strftime('%Y-%m-%d'))
     
-    # Add today even if no events (to show current ongoing status)
+    # Add today even if no events
     today_str = now.strftime('%Y-%m-%d')
-    if today_str not in daily_stats:
-        daily_stats[today_str] = {'events': []}
+    days_in_range.add(today_str)
+    
+    # Now get ALL events for those days (not just events in time range)
+    for h in all_history:
+        dt = datetime.fromtimestamp(h['timestamp'], tz)
+        day = dt.strftime('%Y-%m-%d')
+        if day in days_in_range:
+            if day not in daily_stats:
+                daily_stats[day] = {'events': []}
+            daily_stats[day]['events'].append({'time': h['timestamp'], 'status': h['status']})
     
     # Get status at start of each day for proper calculation
     for day in list(daily_stats.keys()):
