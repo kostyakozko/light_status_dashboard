@@ -212,6 +212,10 @@ def api_stats(channel_id):
                 daily_stats[day] = {'events': []}
             daily_stats[day]['events'].append({'time': h['timestamp'], 'status': h['status']})
     
+    # Ensure today is in daily_stats even if no events
+    if today_str not in daily_stats:
+        daily_stats[today_str] = {'events': []}
+    
     # Get status at start of each day for proper calculation
     for day in list(daily_stats.keys()):
         day_naive = datetime.strptime(day, '%Y-%m-%d')
