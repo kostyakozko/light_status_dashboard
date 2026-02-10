@@ -101,7 +101,6 @@
                         Daily view (percentage)
                     </label>
                 </div>
-                <div id="dateLabels" style="padding: 5px 0; font-size: 12px; color: #666; border-bottom: 1px solid #ddd; margin-bottom: 10px;"></div>
                 <div class="timeline-wrapper">
                     <canvas id="timelineChart"></canvas>
                 </div>
@@ -278,27 +277,6 @@
                     plugins: { legend: { display: false } }
                 }
             });
-            
-            // Generate date labels below timeline
-            const dateLabels = document.getElementById('dateLabels');
-            if (!isDailyView && timelineData.length > 0) {
-                const dates = new Set();
-                timelineData.forEach(point => {
-                    const date = new Date(point.x);
-                    const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
-                    dates.add(dateStr);
-                });
-                dateLabels.textContent = 'Dates: ' + Array.from(dates).join(' | ');
-            } else if (isDailyView) {
-                const days = Object.keys(data.daily).sort();
-                const dateStrs = days.map(day => {
-                    const [y, m, d] = day.split('-');
-                    return `${d}.${m}.${y}`;
-                });
-                dateLabels.textContent = 'Dates: ' + dateStrs.join(' | ');
-            } else {
-                dateLabels.textContent = '';
-            }
             
             // Scroll to the right (most recent data)
             const wrapper = document.querySelector('.timeline-wrapper');
