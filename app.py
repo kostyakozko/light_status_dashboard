@@ -142,30 +142,31 @@ def api_stats(channel_id):
     tz = pytz.timezone(channel['timezone'])
     now = datetime.now(tz)
     
-    # Calculate start time based on range
+    # Calculate start time and range_days based on range
+    range_days = 7  # default
     if range_param == 'week':
-        # Current week (Monday to now)
         start_of_week = now - timedelta(days=now.weekday())
         start_time = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        range_days = 7
     elif range_param == 'month':
-        # Current month (1st to now)
         start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         start_time = start_of_month.timestamp()
+        range_days = now.day
     elif range_param == 'ytd':
-        # Year to date (Jan 1 to now)
         start_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         start_time = start_of_year.timestamp()
+        range_days = (now - start_of_year).days
     elif range_param == 'all':
-        # All time - get first event timestamp
         first_event = conn.execute(
             "SELECT MIN(timestamp) FROM history WHERE channel_id = ?", (channel_id,)
         ).fetchone()
         start_time = first_event[0] if first_event and first_event[0] else now.timestamp()
+        range_days = int((now.timestamp() - start_time) / 86400)
     else:
         # Numeric days
         try:
-            days = int(range_param)
-            start_time = (now - timedelta(days=days)).timestamp()
+            range_days = int(range_param)
+            start_time = (now - timedelta(days=range_days)).timestamp()
         except ValueError:
             return jsonify({'error': 'Invalid range parameter'}), 400
     
@@ -327,11 +328,10 @@ def api_stats(channel_id):
                 'y': round(percentage, 2)
             })
     
-    # Determine grouping period based on range
-    num_days = len(daily_stats)
-    if num_days <= 30:
+    # Determine grouping period based on requested range
+    if range_days <= 30:
         grouping = 'daily'
-    elif num_days <= 90:
+    elif range_days <= 90:
         grouping = 'weekly'
     else:
         grouping = 'monthly'
