@@ -310,9 +310,27 @@ def api_stats(channel_id):
         if 'status_at_start' in data:
             del data['status_at_start']
     
+    # Generate daily timeline for daily view (percentage per day)
+    daily_timeline = []
+    if request.args.get('daily') == 'true':
+        for day in sorted(daily_stats.keys()):
+            day_naive = datetime.strptime(day, '%Y-%m-%d')
+            day_date = tz.localize(day_naive)
+            day_start = day_date.replace(hour=12, minute=0, second=0, microsecond=0)  # Noon for display
+            
+            total_seconds = 24 * 60 * 60
+            uptime_seconds = daily_stats[day]['uptime']
+            percentage = (uptime_seconds / total_seconds) * 100
+            
+            daily_timeline.append({
+                'time': int(day_start.timestamp() * 1000),
+                'y': round(percentage, 2)
+            })
+    
     return jsonify({
         'timeline': timeline,
-        'daily': daily_stats
+        'daily': daily_stats,
+        'daily_timeline': daily_timeline
     })
 
 if __name__ == '__main__':

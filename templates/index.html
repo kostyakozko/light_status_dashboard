@@ -45,7 +45,18 @@
         .chart-container.full {
             grid-column: 1 / -1;
         }
+        .timeline-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 320px;
+        }
+        #timelineChart {
+            height: 300px !important;
+        }
         canvas { max-height: 300px; }
+        .view-toggle {
+            margin-top: 10px;
+        }
         @media (max-width: 768px) {
             .charts { grid-template-columns: 1fr; }
         }
@@ -84,7 +95,15 @@
         <div class="charts">
             <div class="chart-container full">
                 <h3>Status Timeline (<span id="timeRangeLabel">7 days</span>)</h3>
-                <canvas id="timelineChart"></canvas>
+                <div class="view-toggle">
+                    <label>
+                        <input type="checkbox" id="dailyViewToggle" onchange="loadStats()">
+                        Daily view (percentage)
+                    </label>
+                </div>
+                <div class="timeline-wrapper">
+                    <canvas id="timelineChart"></canvas>
+                </div>
             </div>
             
             <div class="chart-container">
@@ -136,6 +155,7 @@
         async function loadStats() {
             const channelId = document.getElementById('channel').value;
             const range = document.getElementById('timeRange').value;
+            const isDailyView = document.getElementById('dailyViewToggle').checked;
             if (!channelId) return;
             
             // Update label
@@ -146,38 +166,118 @@
             };
             document.getElementById('timeRangeLabel').textContent = labels[range] || range + ' days';
             
-            const res = await fetch(`/api/stats/${channelId}?range=${range}`);
+            const res = await fetch(`/api/stats/${channelId}?range=${range}&daily=${isDailyView}`);
             const data = await res.json();
             
-            // Timeline chart
-            const timelineData = data.timeline.map(d => ({
-                x: d.time,
-                y: d.status
-            }));
+            // Calculate chart width for scrolling
+            const minPixelsPerPoint = 10;
+            let chartWidth;
+            
+            if (isDailyView) {
+                // Daily view: one point per day
+                const numDays = Object.keys(data.daily || {}).length;
+                chartWidth = Math.max(numDays * minPixelsPerPoint, 800); // min 800px
+            } else {
+                // Hourly view: calculate hours in range
+                const timelineData = data.timeline || [];
+                if (timelineData.length > 1) {
+                    const startTime = timelineData[0].time;
+                    const endTime = timelineData[timelineData.length - 1].time;
+                    const hours = (endTime - startTime) / (1000 * 60 * 60);
+                    chartWidth = Math.max(hours * minPixelsPerPoint, 800);
+                } else {
+                    chartWidth = 800;
+                }
+            }
+            
+            // Set canvas width
+            const canvas = document.getElementById('timelineChart');
+            canvas.width = chartWidth;
+            canvas.style.width = chartWidth + 'px';
+            
+            // Prepare timeline data
+            let timelineData, yAxisConfig;
+            
+            if (isDailyView) {
+                // Daily view: percentage per day
+                timelineData = data.daily_timeline || [];
+                yAxisConfig = {
+                    min: 0,
+                    max: 100,
+                    ticks: {
+                        callback: v => v + '%'
+                    }
+                };
+            } else {
+                // Hourly view: on/off status
+                timelineData = (data.timeline || []).map(d => ({
+                    x: d.time,
+                    y: d.status
+                }));
+                yAxisConfig = {
+                    min: 0,
+                    max: 1,
+                    ticks: {
+                        callback: v => v === 1 ? 'Online' : 'Offline'
+                    }
+                };
+            }
             
             if (timelineChart) timelineChart.destroy();
             timelineChart = new Chart(document.getElementById('timelineChart'), {
                 type: 'line',
                 data: {
                     datasets: [{
-                        label: 'Status',
+                        label: isDailyView ? 'Uptime %' : 'Status',
                         data: timelineData,
-                        stepped: 'before',
+                        stepped: isDailyView ? false : 'before',
                         borderColor: '#4CAF50',
                         backgroundColor: 'rgba(76, 175, 80, 0.1)',
                         fill: true
                     }]
                 },
                 options: {
+                    maintainAspectRatio: false,
                     scales: {
-                        x: { type: 'time', time: { unit: 'hour' } },
-                        y: { min: 0, max: 1, ticks: {
-                            callback: v => v === 1 ? 'Online' : 'Offline'
-                        }}
+                        x: { 
+                            type: 'time', 
+                            time: { 
+                                unit: isDailyView ? 'day' : 'hour',
+                                displayFormats: {
+                                    hour: 'HH:mm',
+                                    day: 'DD.MM'
+                                },
+                                tooltipFormat: 'DD.MM.YYYY HH:mm'
+                            },
+                            ticks: {
+                                callback: function(value, index, ticks) {
+                                    const date = new Date(value);
+                                    const hours = date.getHours();
+                                    // Show date label at midnight or first tick
+                                    if (hours === 0 || index === 0) {
+                                        const day = String(date.getDate()).padStart(2, '0');
+                                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                                        const year = date.getFullYear();
+                                        // Check if we have space for full date
+                                        if (ticks.length < 24) {
+                                            return `${day}.${month}.${year}`;
+                                        } else {
+                                            return `${day}.${month}`;
+                                        }
+                                    }
+                                    return this.getLabelForValue(value);
+                                }
+                            }
+                        },
+                        y: yAxisConfig
                     },
                     plugins: { legend: { display: false } }
                 }
             });
+            
+            // Scroll to the right (most recent data)
+            const wrapper = document.querySelector('.timeline-wrapper');
+            wrapper.scrollLeft = wrapper.scrollWidth;
             
             // Daily stats
             const dailyDays = Object.keys(data.daily).sort();
