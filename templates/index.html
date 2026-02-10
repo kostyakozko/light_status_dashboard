@@ -45,6 +45,14 @@
         .chart-container.full {
             grid-column: 1 / -1;
         }
+        .bar-chart-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 320px;
+        }
+        #uptimeChart, #downtimeChart {
+            height: 300px !important;
+        }
         .timeline-wrapper {
             overflow-x: auto;
             overflow-y: hidden;
@@ -108,12 +116,16 @@
             
             <div class="chart-container">
                 <h3>Daily Uptime</h3>
-                <canvas id="uptimeChart"></canvas>
+                <div class="bar-chart-wrapper">
+                    <canvas id="uptimeChart"></canvas>
+                </div>
             </div>
             
             <div class="chart-container">
                 <h3>Daily Downtime</h3>
-                <canvas id="downtimeChart"></canvas>
+                <div class="bar-chart-wrapper">
+                    <canvas id="downtimeChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -282,16 +294,38 @@
             const wrapper = document.querySelector('.timeline-wrapper');
             wrapper.scrollLeft = wrapper.scrollWidth;
             
-            // Daily stats
-            const dailyDays = Object.keys(data.daily).sort();
-            const uptimeData = dailyDays.map(d => data.daily[d].uptime / 3600);
-            const downtimeData = dailyDays.map(d => data.daily[d].downtime / 3600);
+            // Use grouped data for bar charts
+            const statsData = data.grouped || data.daily;
+            const grouping = data.grouping || 'daily';
+            const statKeys = Object.keys(statsData).sort();
+            const uptimeData = statKeys.map(k => statsData[k].uptime / 3600);
+            const downtimeData = statKeys.map(k => statsData[k].downtime / 3600);
+            
+            // Calculate chart width for scrolling (min 18px per bar)
+            const minBarWidth = 18;
+            const barChartWidth = Math.max(statKeys.length * minBarWidth, 565);
+            
+            // Update chart title based on grouping
+            document.querySelector('.chart-container:nth-child(2) h3').textContent = 
+                grouping === 'daily' ? 'Daily Uptime' : 
+                grouping === 'weekly' ? 'Weekly Uptime' : 'Monthly Uptime';
+            document.querySelector('.chart-container:nth-child(3) h3').textContent = 
+                grouping === 'daily' ? 'Daily Downtime' : 
+                grouping === 'weekly' ? 'Weekly Downtime' : 'Monthly Downtime';
+            
+            // Set canvas widths
+            const uptimeCanvas = document.getElementById('uptimeChart');
+            const downtimeCanvas = document.getElementById('downtimeChart');
+            uptimeCanvas.width = barChartWidth;
+            uptimeCanvas.style.width = barChartWidth + 'px';
+            downtimeCanvas.width = barChartWidth;
+            downtimeCanvas.style.width = barChartWidth + 'px';
             
             if (uptimeChart) uptimeChart.destroy();
-            uptimeChart = new Chart(document.getElementById('uptimeChart'), {
+            uptimeChart = new Chart(uptimeCanvas, {
                 type: 'bar',
                 data: {
-                    labels: dailyDays,
+                    labels: statKeys,
                     datasets: [{
                         label: 'Hours',
                         data: uptimeData,
@@ -299,6 +333,7 @@
                     }]
                 },
                 options: {
+                    maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true } },
                     plugins: { 
                         legend: { display: false },
@@ -316,10 +351,10 @@
             });
             
             if (downtimeChart) downtimeChart.destroy();
-            downtimeChart = new Chart(document.getElementById('downtimeChart'), {
+            downtimeChart = new Chart(downtimeCanvas, {
                 type: 'bar',
                 data: {
-                    labels: dailyDays,
+                    labels: statKeys,
                     datasets: [{
                         label: 'Hours',
                         data: downtimeData,
@@ -327,6 +362,7 @@
                     }]
                 },
                 options: {
+                    maintainAspectRatio: false,
                     scales: { y: { beginAtZero: true } },
                     plugins: { 
                         legend: { display: false },

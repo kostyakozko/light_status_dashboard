@@ -327,9 +327,48 @@ def api_stats(channel_id):
                 'y': round(percentage, 2)
             })
     
+    # Determine grouping period based on range
+    num_days = len(daily_stats)
+    if num_days <= 30:
+        grouping = 'daily'
+    elif num_days <= 90:
+        grouping = 'weekly'
+    else:
+        grouping = 'monthly'
+    
+    # Group daily stats if needed
+    grouped_stats = {}
+    if grouping == 'daily':
+        grouped_stats = daily_stats
+    elif grouping == 'weekly':
+        # Group by week (Monday-Sunday)
+        for day_str, data in daily_stats.items():
+            day_date = datetime.strptime(day_str, '%Y-%m-%d')
+            # Get Monday of this week
+            monday = day_date - timedelta(days=day_date.weekday())
+            sunday = monday + timedelta(days=6)
+            week_key = f"{monday.strftime('%d.%m')}-{sunday.strftime('%d.%m')}"
+            
+            if week_key not in grouped_stats:
+                grouped_stats[week_key] = {'uptime': 0, 'downtime': 0}
+            grouped_stats[week_key]['uptime'] += data['uptime']
+            grouped_stats[week_key]['downtime'] += data['downtime']
+    else:  # monthly
+        # Group by month
+        for day_str, data in daily_stats.items():
+            day_date = datetime.strptime(day_str, '%Y-%m-%d')
+            month_key = day_date.strftime('%b %Y')  # e.g., "Feb 2026"
+            
+            if month_key not in grouped_stats:
+                grouped_stats[month_key] = {'uptime': 0, 'downtime': 0}
+            grouped_stats[month_key]['uptime'] += data['uptime']
+            grouped_stats[month_key]['downtime'] += data['downtime']
+    
     return jsonify({
         'timeline': timeline,
         'daily': daily_stats,
+        'grouped': grouped_stats,
+        'grouping': grouping,
         'daily_timeline': daily_timeline
     })
 
