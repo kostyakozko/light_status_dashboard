@@ -49,14 +49,29 @@ def check_auth():
     return session.get('telegram_user_id') is not None
 
 def check_channel_access(user_id, channel_id):
-    """Check if user owns the channel"""
+    """Check if user owns the channel or is whitelisted"""
     conn = get_db()
     channel = conn.execute(
         "SELECT owner_id FROM channels WHERE channel_id = ?", (channel_id,)
     ).fetchone()
+    
+    if not channel:
+        conn.close()
+        return False
+    
+    # Check if owner
+    if channel['owner_id'] == user_id:
+        conn.close()
+        return True
+    
+    # Check if whitelisted
+    whitelisted = conn.execute(
+        "SELECT 1 FROM whitelist WHERE channel_id = ? AND user_id = ?",
+        (channel_id, user_id)
+    ).fetchone()
     conn.close()
     
-    return channel and channel['owner_id'] == user_id
+    return whitelisted is not None
 
 @app.route('/')
 def index():
@@ -92,16 +107,28 @@ def api_channels():
     
     user_id = session['telegram_user_id']
     
-    # Get only user's channels
+    # Get user's own channels and whitelisted channels
     conn = get_db()
-    channels = conn.execute(
+    
+    # Own channels
+    own_channels = conn.execute(
         "SELECT channel_id, channel_name, is_power_on, last_request_time FROM channels WHERE owner_id = ?",
         (user_id,)
     ).fetchall()
+    
+    # Whitelisted channels
+    whitelisted_channels = conn.execute(
+        """SELECT c.channel_id, c.channel_name, c.is_power_on, c.last_request_time 
+           FROM channels c 
+           JOIN whitelist w ON c.channel_id = w.channel_id 
+           WHERE w.user_id = ?""",
+        (user_id,)
+    ).fetchall()
+    
     conn.close()
     
     result = []
-    for ch in channels:
+    for ch in own_channels + whitelisted_channels:
         result.append({
             'id': ch['channel_id'],
             'name': ch['channel_name'] or f"Channel {ch['channel_id']}",
