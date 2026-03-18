@@ -297,7 +297,9 @@
             // Use grouped data for bar charts
             const statsData = data.grouped || data.daily;
             const grouping = data.grouping || 'daily';
+            const labels = data.grouped_labels || {};
             const statKeys = Object.keys(statsData).sort();
+            const statLabels = statKeys.map(k => labels[k] || k);
             const uptimeData = statKeys.map(k => statsData[k].uptime / 3600);
             const downtimeData = statKeys.map(k => statsData[k].downtime / 3600);
             
@@ -325,7 +327,7 @@
             uptimeChart = new Chart(uptimeCanvas, {
                 type: 'bar',
                 data: {
-                    labels: statKeys,
+                    labels: statLabels,
                     datasets: [{
                         label: 'Hours',
                         data: uptimeData,
@@ -354,7 +356,7 @@
             downtimeChart = new Chart(downtimeCanvas, {
                 type: 'bar',
                 data: {
-                    labels: statKeys,
+                    labels: statLabels,
                     datasets: [{
                         label: 'Hours',
                         data: downtimeData,
