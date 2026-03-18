@@ -321,9 +321,9 @@ def api_stats(channel_id):
             # Today: add from last event to now
             end_time = now.timestamp()
         else:
-            # Past day: add from last event to end of day (23:59:59)
-            end_of_day = day_date.replace(hour=23, minute=59, second=59)
-            end_time = end_of_day.timestamp()
+            # Past day: add from last event to end of day (midnight next day)
+            end_of_day = day_date + timedelta(days=1)
+            end_time = end_of_day.replace(hour=0, minute=0, second=0).timestamp()
         
         ongoing_duration = end_time - prev_time
         if prev_status == 1:
