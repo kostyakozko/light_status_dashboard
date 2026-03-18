@@ -248,15 +248,13 @@ def api_stats(channel_id):
     # Calculate daily stats - use all_history to get complete days
     daily_stats = {}
     
-    # First, determine which days are in our time range
+    # Generate ALL calendar days in the range
+    start_dt = datetime.fromtimestamp(start_time, tz).replace(hour=0, minute=0, second=0, microsecond=0)
     days_in_range = set()
-    for h in history:
-        dt = datetime.fromtimestamp(h['timestamp'], tz)
-        days_in_range.add(dt.strftime('%Y-%m-%d'))
-    
-    # Add today even if no events
-    today_str = now.strftime('%Y-%m-%d')
-    days_in_range.add(today_str)
+    d = start_dt
+    while d.date() <= now.date():
+        days_in_range.add(d.strftime('%Y-%m-%d'))
+        d += timedelta(days=1)
     
     # Now get ALL events for those days (not just events in time range)
     for h in all_history:
@@ -267,9 +265,10 @@ def api_stats(channel_id):
                 daily_stats[day] = {'events': []}
             daily_stats[day]['events'].append({'time': h['timestamp'], 'status': h['status']})
     
-    # Ensure today is in daily_stats even if no events
-    if today_str not in daily_stats:
-        daily_stats[today_str] = {'events': []}
+    # Ensure all days in range exist in daily_stats (even with no events)
+    for day in days_in_range:
+        if day not in daily_stats:
+            daily_stats[day] = {'events': []}
     
     # Get status at start of each day for proper calculation
     for day in list(daily_stats.keys()):
